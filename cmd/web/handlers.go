@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	neturl "net/url"
 )
 
 func (app *Config) HomePage(w http.ResponseWriter, r *http.Request) {
@@ -102,8 +103,8 @@ func (app *Config) PostRegisterPage(w http.ResponseWriter, r *http.Request) {
 	// create a user
 	u := data.User{
 		Email:     r.Form.Get("email"),
-		FirstName: r.Form.Get("first_name"),
-		LastName:  r.Form.Get("last_name"),
+		FirstName: r.Form.Get("first-name"),
+		LastName:  r.Form.Get("last-name"),
 		Password:  r.Form.Get("password"),
 		Active:    0,
 		IsAdmin:   0,
@@ -117,7 +118,7 @@ func (app *Config) PostRegisterPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// send an activation email
-	url := fmt.Sprintf("http://localhost/activate?email=%s", u.Email)
+	url := fmt.Sprintf("http://localhost/activate?email=%s", neturl.QueryEscape(u.Email))
 	signedURL := GenerateTokenFromString(url)
 	app.InfoLog.Println(signedURL)
 
@@ -147,7 +148,8 @@ func (app *Config) ActivateAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// activate account
-	u, err := app.Models.User.GetByEmail(r.Form.Get("email"))
+	email := r.URL.Query().Get("email")
+	u, err := app.Models.User.GetByEmail(email)
 	if err != nil {
 		app.Session.Put(r.Context(), "error", "No user found.")
 		http.Redirect(w, r, "/", http.StatusSeeOther)
