@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	neturl "net/url"
+	"strconv"
 )
 
 func (app *Config) HomePage(w http.ResponseWriter, r *http.Request) {
@@ -167,11 +168,75 @@ func (app *Config) ActivateAccount(w http.ResponseWriter, r *http.Request) {
 	app.Session.Put(r.Context(), "flash", "Account activated. Please login.")
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 
-	// generate an invoice
+}
 
-	// send an email with attachments
+func (app *Config) SubscribeToPlan(w http.ResponseWriter, r *http.Request) {
+	// get the id of plan that is chosen
+	id := r.URL.Query().Get("id")
 
-	// send an email with invoice atteached
+	planID, _ := strconv.Atoi(id)
 
-	// subscribe the user to and account
+	// get the plan from the database
+	plan, err := app.Models.Plan.GetOne(planID)
+	if err != nil {
+		app.Session.Put(r.Context(), "error", "Unable to find plan.")
+		http.Redirect(w, r, "/members/plans", http.StatusSeeOther)
+		return
+	}
+
+	// get the user from the session
+	user, ok := app.Session.Get(r.Context(), "user").(data.User)
+	if !ok {
+		app.Session.Put(r.Context(), "error", "Log in first.")
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+
+	// generate an invoice and email in
+	app.Wait.Add(1)
+
+	go func() {
+		defer app.Wait.Done()
+
+		invoice, err := app.getInvoice(user, plan)
+		if err != nil {
+			app.ErrorChan <- err
+			return
+		}
+
+		msg := Message{
+			To:       user.Email,
+			Subject:  "Your invoice",
+			Data:     invoice,
+			Template: "invoice",
+		}
+
+		app.sendEmail(msg)
+
+	}()
+
+	// generate a manual
+
+	// send an email with the manual attached
+
+	// redirect
+}
+
+func (app *Config) getInvoice(u data.User, plan *data.Plan) (string, error) {
+	return plan.PlanAmountFormatted, nil
+}
+
+func (app *Config) ChooseSubscription(w http.ResponseWriter, r *http.Request) {
+	plans, err := app.Models.Plan.GetAll()
+	if err != nil {
+		app.ErrorLog.Println(err)
+		return
+	}
+
+	dataMap := make(map[string]any)
+	dataMap["plans"] = plans
+
+	app.render(w, r, "plans.page.gohtml", &TemplateData{
+		Data: dataMap,
+	})
 }
